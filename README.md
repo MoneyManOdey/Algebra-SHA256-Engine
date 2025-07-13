@@ -188,45 +188,77 @@ These capabilities carry profound implications for decentralization, economic in
 ---
 ## 🔬 Symbolic SHA‑256 Expansion Model
 
-The symbolic expansion model produces a fixed sequence of sixty-four 32‑bit words from each input block, enforcing full diffusion of message bits through the compression function.  The first sixteen words are taken verbatim from the input block.  Every subsequent word is computed by combining four earlier words through a pair of lightweight bitwise rotation‑and‑shift transformations and modular addition of 32‑bit values.  Specifically, each new word is formed by applying two distinct fan‑in rotation/shift routines to words two and fifteen positions back and then summing those transformed words together with the words seven and sixteen positions back, wrapping around on 32 bits.  The rotation/shift routines themselves mix the bits of a single 32‑bit word by executing a narrow logical right shift together with two right‑rotations of different fixed widths and then merging the results via a bitwise exclusive‑OR.  This deterministic construction propagates every input bit into all future words, establishing the avalanche effect central to SHA‑256’s security.
+The symbolic expansion model in SHA‑256 can be broken into the following layered operations:
+
+- **Initial Word Injection**  
+  Directly load the first 16 message words from the input block into the schedule, preserving original data context for the compression input.
+
+- **Recursive Word Synthesis**  
+  For every position from 16 to 63, synthesize a new word by aggregating four precedent words (indices t−2, t−7, t−15, t−16) through modular 32‑bit addition, ensuring stateful chaining of prior computations.
+
+- **Rotation/Shift Fusion**  
+  Execute lightweight bit-mixing routines: two right-rotations of differing offsets combined with a logical right-shift on a single word, then merge via bitwise XOR to produce maximum bit dispersion per operation.
+
+- **Avalanche Propagation**  
+  By iterating these transformations, enforce that each input bit influences all subsequent words, achieving the strict bit-diffusion (avalanche) property critical for cryptographic strength.
 
 ```mermaid
 flowchart LR
-    subgraph Message_Schedule [Message Schedule]
-      M0[Input words 0–15]
-      Wt[Expanded words 16–63]
+    subgraph ExpansionPipeline [SHA‑256 Message Schedule Pipeline]
+      IW[Initial Injection]
+      RS[Recursive Synthesis]
+      RF[Rotation/Shift Fusion]
+      AP[Avalanche Propagation]
     end
-    M0 --> Wt
+    IW --> RS --> RF --> AP
 ```
 
 ## 🧮 Algebraic Structure Definitions
 
-| Symbol | Definition                                    |
-|:------:|:----------------------------------------------|
-| ⊕      | Bitwise XOR in GF(2) (Boolean ring)           |
-| ∧      | Bitwise AND in GF(2) (Boolean ring)           |
-| +      | Addition \(\bmod\,2^{32}\)                    |
-| ≫_r    | Logical right shift by \(r\) bits             |
-| ▷_r    | Right rotate by \(r\) bits                    |
+Define the primary algebraic operators employed across the SHA‑256 compression and inversion pipeline:
+
+- **Bitwise XOR (⊕)**  
+  Exclusive disjunction in the Boolean field GF(2); fundamental for merging bit patterns without carry propagation.
+
+- **Bitwise AND (∧)**  
+  Conjunctive operation capturing bitwise gating, pivotal in conditional mixing and nonlinear gate definitions.
+
+- **Modulo‑2³² Addition (+)**  
+  32‑bit word addition with wraparound, ensuring fixed‑width arithmetic consistency in the compression and schedule.
+
+- **Logical Right Shift (≫ₙ)**  
+  Zero‑extend logical bit displacement; used in small sigma routines for low‑order bit mixing.
+
+- **Right Rotate (▷ₙ)**  
+  Cyclic bit rotation preserving all bit occurrences; used extensively for word‑level diffusion without data loss.
 
 Field operations are lifted pointwise on 32‑bit vectors, forming a ring \(\mathbb{Z}/2^{32}\). The Boolean substructure over each bit lives in \(\mathrm{GF}(2)\).
 
 ## 📊 Matrix Rank Decomposition and GF(2) Inversion
 
-The linearized compression step can be viewed as a GF(2) matrix \(M\in\mathbb{F}_2^{32\times32}\). We perform a rank decomposition \(M = U V\) to invert linear layers in situ.
+The linear layers within the SHA‑256 compression function admit a GF(2) representation as a 32×32 binary matrix.  Inversion of these layers leverages:
 
-| Round | \(\mathrm{rank}(M)\) |
-|:-----:|:--------------------:|
-|   0   | 32                   |
-|   1   | 31                   |
-|  …    | …                    |
-|  63   | 29                   |
+- **Linear Layer Extraction**  
+  Isolate each word‑to‑word linear mapping in the compression loop and model it as a Boolean matrix over GF(2).
+
+- **Rank Profiling**  
+  Analyze the transform’s rank per round to understand invertibility margins and dimension reduction effects across 32 iterations.
+
+- **Rank Decomposition**  
+  Factor each 32×32 matrix into a product U·V via Gaussian elimination in GF(2), yielding forward/backward transform components.
+
+- **Back‑substitution Inversion**  
+  Apply U and V factors sequentially to reverse linear diffusion, recovering pre‑transform state vectors efficiently.
 
 ```mermaid
 flowchart TD
-    A[Input bits] --> B[Gaussian elimination]
-    B --> C[Rank decomposition: U·V]
-    C --> D[Back-substitution]
+    subgraph LinearInversion [GF(2) Linear Inversion]
+      LE[Layer Extraction]
+      RP[Rank Profiling]
+      RD[Rank Decomposition]
+      BS[Back‑substitution]
+    end
+    LE --> RP --> RD --> BS
 ```
 
 ## 🧠 Field Lifting & Nonlinear Collapse Strategies
