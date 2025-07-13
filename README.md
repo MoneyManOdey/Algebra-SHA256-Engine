@@ -231,12 +231,15 @@ flowchart TD
 
 ## 🧠 Field Lifting & Nonlinear Collapse Strategies
 
-Non‑linear gates (Ch, Maj) are collapsed by lifting bit constraints to the 2‑element field \(\mathrm{GF}(2)\) and solving per-bit tracer inequalities. For each bit \(b\):
-\[
-\text{Ch}(x,y,z)_b = (x_b\wedge y_b)\oplus(\neg x_b\wedge z_b),\quad
-\text{Maj}(x,y,z)_b = (x_b\wedge y_b)\oplus(x_b\wedge z_b)\oplus(y_b\wedge z_b).
-\]
-Field lifting aggregates bit‑level constraints into a system of linear equations over \(\mathrm{GF}(2)\), enabling symbolic inversion.
+Non‑linear Boolean primitives in the SHA‑256 compression—namely the Choice (Ch) and Majority (Maj) functions—are inherently nonlinear in bit‑level arithmetic.  To handle these within a symbolic inversion framework, we lift each gate’s bitwise relations into the two‑element field, treating AND, OR and NOT as GF(2) operations on individual bits.  Each output bit is then represented as an algebraic equation over three input bits in GF(2).  By introducing auxiliary variables for rotations and shifts, we collect all per‑bit equations from every nonlinear gate into one global sparse linear system over GF(2).  Finally, we collapse the nonlinear layer by solving this system via Gaussian elimination, extracting the original symbolic inputs.
+
+```mermaid
+flowchart LR
+    A["Nonlinear gates: Ch & Maj"] --> B["Lift bit ops into GF(2)"]
+    B --> C["Generate per-bit algebraic equations"]
+    C --> D["Assemble global linear system"]
+    D --> E["Solve via Gaussian elimination"]
+```
 
 ## ⚙️ Launch Command & Runtime Execution
 
