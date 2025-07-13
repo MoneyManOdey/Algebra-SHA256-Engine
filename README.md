@@ -228,3 +228,28 @@ flowchart TD
     B --> C[Rank decomposition: U·V]
     C --> D[Back-substitution]
 ```
+
+## 🧠 Field Lifting & Nonlinear Collapse Strategies
+
+**Field Lifting (embedding → GF(2))**  
+Mapping Boolean logic into the two‑element field \(\mathrm{GF}(2)\), where bitwise AND, OR, XOR and NOT become linear or affine operations on individual bit variables. This embedding ensures each gate’s truth table is representable as arithmetic over a finite field.
+
+**Nonlinear Gate Collapse (constraint linearization)**  
+Decomposing the Choice (Ch) and Majority (Maj) gates by introducing auxiliary bit variables. Each output bit is expressed as a linear equation over GF(2), capturing the gate’s Boolean functionality without exponentiation or branching.
+
+**Per-bit Algebraic System (equation assembly)**  
+Accumulate all bit‑level constraints from rotations, shifts and collapsed nonlinear gates into a sparse global matrix over GF(2). Rows represent individual bit equations; columns correspond to symbolic input bits or auxiliaries.
+
+**Gaussian Elimination (solver)**  
+Apply optimized sparse Gaussian elimination in GF(2) to the assembled system, solving for all symbolic bit variables simultaneously and thus collapsing the nonlinear layer into explicit solutions.
+
+```mermaid
+flowchart TD
+    subgraph CollapsePipeline [Nonlinear Collapse Pipeline]
+      FL[Field Lifting]
+      NG[Nonlinear Gate Collapse]
+      PA[Per-bit Algebraic System]
+      GE[Gaussian Elimination]
+    end
+    FL --> NG --> PA --> GE
+```
