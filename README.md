@@ -183,7 +183,7 @@ These capabilities carry profound implications for decentralization, economic in
 
 ---
 
-*This document was auto-generated for publication on GitHub. For bug reports or contribution guidelines, see `CONTRIBUTING.md`.*
+
 
 ---
 ## 🔬 Symbolic SHA‑256 Expansion Model
