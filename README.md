@@ -189,18 +189,18 @@ These capabilities carry profound implications for decentralization, economic in
 ## 🔬 Symbolic SHA‑256 Expansion Model
 
 The SHA‑256 message schedule $W_t$ is symbolically expanded over 32‑bit words via:
-\[
+$$
 W_t =
 \begin{cases}
 M_t & 0 \le t < 16,\\
 \sigma_1(W_{t-2}) + W_{t-7} + \sigma_0(W_{t-15}) + W_{t-16} \pmod{2^{32}} & 16 \le t < 64,
 \end{cases}
-\]
+$$
 where
-\[
+$$
 \sigma_0(x) = \mathrm{ROTR}^7(x) \oplus \mathrm{ROTR}^{18}(x)\oplus \mathrm{SHR}^3(x),\quad
 \sigma_1(x) = \mathrm{ROTR}^{17}(x) \oplus \mathrm{ROTR}^{19}(x)\oplus \mathrm{SHR}^{10}(x).
-\]
+$$
 
 ```mermaid
 graph LR
