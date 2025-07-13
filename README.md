@@ -228,31 +228,3 @@ flowchart TD
     B --> C[Rank decomposition: U·V]
     C --> D[Back-substitution]
 ```
-
-## 🧠 Field Lifting & Nonlinear Collapse Strategies
-
-Non‑linear Boolean primitives in the SHA‑256 compression—namely the Choice (Ch) and Majority (Maj) functions—are inherently nonlinear in bit‑level arithmetic.  To handle these within a symbolic inversion framework, we lift each gate’s bitwise relations into the two‑element field, treating AND, OR and NOT as GF(2) operations on individual bits.  Each output bit is then represented as an algebraic equation over three input bits in GF(2).  By introducing auxiliary variables for rotations and shifts, we collect all per‑bit equations from every nonlinear gate into one global sparse linear system over GF(2).  Finally, we collapse the nonlinear layer by solving this system via Gaussian elimination, extracting the original symbolic inputs.
-
-```mermaid
-flowchart LR
-    A["Nonlinear gates: Ch & Maj"] --> B["Lift bit ops into GF(2)"]
-    B --> C["Generate per-bit algebraic equations"]
-    C --> D["Assemble global linear system"]
-    D --> E["Solve via Gaussian elimination"]
-```
-
-## ⚙️ Launch Command & Runtime Execution
-
-```bash
-$ python3 aci_resolver.py
-```
-
-```json
-{
-  "status": "success",
-  "duration": "1.23s",
-  "solved_nonce": "0x1A2B3C4D",
-  "block_hash": "0000000000000000000abcdef1234567890abcdef1234567890abcdef1234567",
-  "header_hex": "00000020...<80-byte-header-hex>..."
-}
-```
