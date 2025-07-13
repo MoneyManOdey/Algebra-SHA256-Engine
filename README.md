@@ -188,25 +188,13 @@ These capabilities carry profound implications for decentralization, economic in
 ---
 ## 🔬 Symbolic SHA‑256 Expansion Model
 
-The SHA‑256 message schedule $W_t$ is symbolically expanded over 32‑bit words via:
-$$
-W_t =
-\begin{cases}
-M_t & 0 \le t < 16,\\
-\sigma_1(W_{t-2}) + W_{t-7} + \sigma_0(W_{t-15}) + W_{t-16} \pmod{2^{32}} & 16 \le t < 64,
-\end{cases}
-$$
-where
-$$
-\sigma_0(x) = \mathrm{ROTR}^7(x) \oplus \mathrm{ROTR}^{18}(x)\oplus \mathrm{SHR}^3(x),\quad
-\sigma_1(x) = \mathrm{ROTR}^{17}(x) \oplus \mathrm{ROTR}^{19}(x)\oplus \mathrm{SHR}^{10}(x).
-$$
+The symbolic expansion model produces a fixed sequence of sixty-four 32‑bit words from each input block, enforcing full diffusion of message bits through the compression function.  The first sixteen words are taken verbatim from the input block.  Every subsequent word is computed by combining four earlier words through a pair of lightweight bitwise rotation‑and‑shift transformations and modular addition of 32‑bit values.  Specifically, each new word is formed by applying two distinct fan‑in rotation/shift routines to words two and fifteen positions back and then summing those transformed words together with the words seven and sixteen positions back, wrapping around on 32 bits.  The rotation/shift routines themselves mix the bits of a single 32‑bit word by executing a narrow logical right shift together with two right‑rotations of different fixed widths and then merging the results via a bitwise exclusive‑OR.  This deterministic construction propagates every input bit into all future words, establishing the avalanche effect central to SHA‑256’s security.
 
 ```mermaid
-graph LR
-    subgraph "Message Schedule"
-      M0["M_0…M_{15}"]
-      Wt["W_t = σ₁(W_{t-2}) + W_{t-7} + σ₀(W_{t-15}) + W_{t-16}"]
+flowchart LR
+    subgraph Message_Schedule [Message Schedule]
+      M0[Input words 0–15]
+      Wt[Expanded words 16–63]
     end
     M0 --> Wt
 ```
