@@ -204,7 +204,7 @@ The symbolic expansion model in SHA‑256 can be broken into the following layer
 
 ```mermaid
 flowchart LR
-    subgraph ExpansionPipeline [SHA‑256 Message Schedule Pipeline]
+    subgraph ExpansionPipeline["SHA-256 Message Schedule Pipeline"]
       IW[Initial Injection]
       RS[Recursive Synthesis]
       RF[Rotation/Shift Fusion]
@@ -252,7 +252,7 @@ The linear layers within the SHA‑256 compression function admit a GF(2) repres
 
 ```mermaid
 flowchart TD
-    subgraph LinearInversion [GF(2) Linear Inversion]
+    subgraph LinearInversion["GF(2) Linear Inversion"]
       LE[Layer Extraction]
       RP[Rank Profiling]
       RD[Rank Decomposition]
@@ -277,7 +277,7 @@ Apply optimized sparse Gaussian elimination in GF(2) to the assembled system, so
 
 ```mermaid
 flowchart TD
-    subgraph CollapsePipeline [Nonlinear Collapse Pipeline]
+    subgraph CollapsePipeline["Nonlinear Collapse Pipeline"]
       FL[Field Lifting]
       NG[Nonlinear Gate Collapse]
       PA[Per-bit Algebraic System]
