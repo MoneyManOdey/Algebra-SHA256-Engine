@@ -435,16 +435,36 @@ class SHA256SymbolicInversionEngine:
         Returns the recovered nonce as a 32-bit integer.
         """
         # simply delegate to invert() and reconstruct integer nonce
-        target = [node.eval() for node in digest_out]
         try:
-            bits = self.invert(target)
+            # attempt symbolic inversion first
+            target_words = [node.eval() for node in digest_out]
+            bits = self.invert(target_words)
             return sum((b << i) for i, b in enumerate(bits)) & 0xFFFFFFFF
-        except RuntimeError:
-            # fallback: if ParamGate has cached concrete _value, use it
+        except (RuntimeError, ValueError):
+            # fallback: check for any cached ParamGate value
             param_nodes = [n for n in self.msg_nodes if isinstance(n.gate, ParamGate)]
             if len(param_nodes) == 1 and getattr(param_nodes[0], '_value', None) is not None:
                 return param_nodes[0]._value & 0xFFFFFFFF
-            raise
+            # brute-force search using header prefix and target threshold
+            import struct, hashlib
+
+            print("Symbolic inversion failed; falling back to brute-force search...")
+            # header_pref and target must be set on engine before calling resolve
+            header_pref = getattr(self, 'header_pref', None)
+            target_val = getattr(self, 'target_thresh', None)
+            if header_pref is None or target_val is None:
+                raise RuntimeError("Brute-force requires engine.header_pref and engine.target_thresh")
+            for nonce in range(1 << 32):
+                if nonce & 0xFFFFF == 0:
+                    print(f"Brute-forcing nonce: {nonce}")
+                hdr = header_pref + struct.pack('<L', nonce)
+                h1 = hashlib.sha256(hdr).digest()
+                h2 = hashlib.sha256(h1).digest()
+                hash_int = int.from_bytes(h2[::-1], 'big')
+                if hash_int <= target_val:
+                    print(f"Found valid nonce by brute force: {nonce}")
+                    return nonce
+            raise RuntimeError("Brute-force nonce search failed")
 
 
 if __name__ == '__main__':
@@ -512,6 +532,9 @@ if __name__ == '__main__':
     print("Target digest words:", [f"0x{w:08x}" for w in target_words])
 
     print("Solving for nonce via algebraic inversion (this may take a while)...")
+    # prepare fallback data for brute-force if symbolic fails
+    engine.header_pref = header_pref
+    engine.target_thresh = target
     start = time.time()
     solved_nonce = engine.resolve(digest_nodes)
     elapsed = time.time() - start
