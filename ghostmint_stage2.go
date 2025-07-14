@@ -6,7 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os/exec"
 	"time"
 
@@ -25,6 +27,38 @@ type Stage2Info struct {
 	Timestamp uint32 `json:"Timestamp"`
 	TreeRoot  string `json:"TreeRoot"`
 	Nonce     uint32 `json:"Nonce"`
+}
+
+// submitBlockRPC sends the hex-encoded block via JSON-RPC to local node
+func submitBlockRPC(hexBlock string) error {
+	reqObj := map[string]interface{}{
+		"method":  "submitblock",
+		"params":  []string{hexBlock},
+		"id":      1,
+		"jsonrpc": "2.0",
+	}
+	reqBytes, err := json.Marshal(reqObj)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON-RPC request: %v", err)
+	}
+	httpReq, err := http.NewRequest("POST", "http://127.0.0.1:8332", bytes.NewBuffer(reqBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create HTTP request: %v", err)
+	}
+	httpReq.SetBasicAuth("Oliver", "satoshi")
+	httpReq.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("RPC HTTP error: %v", err)
+	}
+	defer resp.Body.Close()
+	respBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read RPC response: %v", err)
+	}
+	fmt.Printf("RPC Response: %s\n", string(respBytes))
+	return nil
 }
 
 // reverseBytes reverses a byte slice
@@ -155,15 +189,10 @@ func main() {
 	}
 	unitHex := hex.EncodeToString(buf.Bytes())
 
-	// Step 5: relay unit via standard protocol (bitcoin-cli)
-	resp, err := exec.Command("bitcoin-cli", "sendrawblock", unitHex).CombinedOutput()
-	if err != nil {
-		log.Fatalf("broadcast failed: %v\n%s", err, resp)
+	// Step 5: submit block via JSON-RPC submitblock
+	if err := submitBlockRPC(unitHex); err != nil {
+		log.Fatalf("submitblock RPC error: %v", err)
 	}
-	fmt.Printf("Broadcast response: %s", resp)
-
-	// confirmation placeholder
-	fmt.Println("\nUnit acknowledged by node")
 
 	// Print metadata for record and README entry
 	fmt.Println("-- Operation Metadata --")
