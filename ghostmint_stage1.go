@@ -1,6 +1,3 @@
-//go:build ignore
-// +build ignore
-
 // ghostmint_stage1.go - Stage 1: fetch live header fields & nonce via aci_resolver.py, validate PoW
 package main
 
@@ -11,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/big"
 	"os/exec"
 	"strings"
@@ -56,14 +54,14 @@ func main() {
 	// Call aci_resolver.py and capture JSON
 	out, err := exec.Command("python3", "aci_resolver.py").CombinedOutput()
 	if err != nil {
-		fmt.Fatalf("aci_resolver.py error: %v\n%s", err, string(out))
+		log.Fatalf("aci_resolver.py error: %v\n%s", err, string(out))
 	}
 	// Expect last line to be JSON
 	lines := bytes.Split(bytes.TrimSpace(out), []byte{'\n'})
 	last := lines[len(lines)-1]
 	var info HeaderInfo
 	if err := json.Unmarshal(last, &info); err != nil {
-		fmt.Fatalf("failed to parse JSON: %v\n%s", err, last)
+		log.Fatalf("failed to parse JSON: %v\n%s", err, last)
 	}
 
 	// Construct header bytes
