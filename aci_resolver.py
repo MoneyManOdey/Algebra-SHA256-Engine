@@ -535,6 +535,7 @@ if __name__ == '__main__':
             "PrevBlock": prev_hash,
             "Bits": bits_int,
             "Timestamp": prev_time + 1,
+            "TreeRoot": merkle_root,
             "Nonce": solved_nonce,
         }
         print(json.dumps(result))

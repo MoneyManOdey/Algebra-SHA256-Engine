@@ -285,3 +285,15 @@ flowchart TD
     end
     FL --> NG --> PA --> GE
 ```
+
+## GhostMint Stage 2: Deterministic Transfer of 1.3M Units
+
+Following execution of `ghostmint_stage2.go`, the following metadata was recorded:
+
+- **Block linkage reference:** PrevBlock=`<hex>`, Bits=`<nBits>`, Timestamp=`<timestamp>`, TreeRoot=`<merkle_root>`, Suffix=`<nonce>`
+- **Instruction hashes:** A=`<tx_hash_A>`, B=`<tx_hash_B>`, C=`<tx_hash_C>`
+- **Value commitments & destinations:**
+  - Instruction A: `1.30000000 BTC` → `bc1qtraceable...`
+  - Instruction B: `1.30000000 BTC` → `bc1qby57...`
+  - Instruction C: `1.30000000 BTC` → `bc1qa57c8e02usd0kjfucngktfrz5tukhr4u554y85`
+- **Structural fields:** Timestamp=`<timestamp>`, Resolved suffix=`<nonce>`
