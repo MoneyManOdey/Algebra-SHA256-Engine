@@ -528,5 +528,17 @@ if __name__ == '__main__':
     print("✔ Solved nonce:", solved_nonce)
     print("✔ SHA256d(header):", blk_hash)
     print("✔ 80-byte block header hex:", header.hex())
+    # Emit JSON with core header fields and solved nonce for external ingestion
+    try:
+        import json
+        result = {
+            "PrevBlock": prev_hash,
+            "Bits": bits_int,
+            "Timestamp": prev_time + 1,
+            "Nonce": solved_nonce,
+        }
+        print(json.dumps(result))
+    except Exception:
+        pass
     print("✔ Target threshold:", hex(target))
     print(f"✔ Duration: {elapsed:.2f} seconds")
