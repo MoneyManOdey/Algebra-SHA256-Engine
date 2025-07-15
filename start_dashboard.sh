@@ -14,6 +14,7 @@ echo "Syncing dashboard code to $BITCOINSSD_VOLUME..."
 rsync -a --delete "$SCRIPT_DIR/Source/BitcoinSSD" "$BITCOINSSD_VOLUME/Source/"
 rsync -a --delete "$SCRIPT_DIR/Config" "$BITCOINSSD_VOLUME/Config/"
 rsync -a --delete "$SCRIPT_DIR/sha256_cat_collapse.py" "$BITCOINSSD_VOLUME/Scripts/"
+rsync -a --delete "$SCRIPT_DIR"/*.uproject "$BITCOINSSD_VOLUME/"
 
 echo "Launching dashboard..."
 cd "$BITCOINSSD_VOLUME"
