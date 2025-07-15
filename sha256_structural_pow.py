@@ -11,8 +11,8 @@ It produces the full rule scaffold (no solving) for downstream queries.
 """
 import sys
 from z3 import (
-    Fixedpoint, BitVecSort, IntSort, BoolSort,
-    Function, IntVal, BoolVal, Not, Xor
+    Fixedpoint, IntSort, BoolSort,
+    Function, IntVal, BoolVal, Not, Xor, And
 )
 
 def mk_sha256_rules(header_words):
@@ -84,30 +84,63 @@ def mk_sha256_rules(header_words):
             else:
                 fp.rule(Not(rel(IntVal(0), IntVal(j))), BoolVal(True))
 
-    # Compression rounds 0..63 rules
+    # Compression rounds 0..63 rules: full Sigma, Ch, Maj, state update
     for r in range(64):
         for j in range(32):
-            # Structural placeholders for round logic:
-            #   T1 = H(r,j) ^ big_sigma1(E(r,j)) ^ Ch(E,F,G,j) ^ K[r]_j ^ W(r,j)
-            #   T2 = big_sigma0(A(r,j)) ^ Maj(A,B,C,j)
-            #   A(r+1,j) = T1 ^ T2
-            #   B(r+1,j) = A(r,j)
-            #   ... etc.
-            headA = A(IntVal(r+1), IntVal(j))
-            # body placeholder: XOR of placeholders
-            bodyA = Xor(
+            # Sigma1(E)
+            s1 = Xor(
+                E(IntVal(r), IntVal((j+6) % 32)),
+                E(IntVal(r), IntVal((j+11) % 32)),
+                E(IntVal(r), IntVal((j+25) % 32))
+            )
+            # Ch(E,F,G)
+            ch_efg = Xor(
+                And(E(IntVal(r), IntVal(j)), F(IntVal(r), IntVal(j))),
+                And(Not(E(IntVal(r), IntVal(j))), G(IntVal(r), IntVal(j)))
+            )
+            # T1 = H + Sigma1(E) + Ch + K[r]_bit + W
+            kr = (header_words and K[r]) or K[r]
+            t1 = Xor(
                 H(IntVal(r), IntVal(j)),
-                E(IntVal(r), IntVal(j)),
-                A(IntVal(r), IntVal(j)),
-                # Add other terms...
+                s1,
+                ch_efg,
+                BoolVal((K[r] >> j) & 1),
                 W(IntVal(r), IntVal(j))
             )
-            fp.rule(headA, bodyA)
+            # Sigma0(A)
+            s0 = Xor(
+                A(IntVal(r), IntVal((j+2) % 32)),
+                A(IntVal(r), IntVal((j+13) % 32)),
+                A(IntVal(r), IntVal((j+22) % 32))
+            )
+            # Maj(A,B,C)
+            maj_abc = Xor(
+                And(A(IntVal(r), IntVal(j)), B(IntVal(r), IntVal(j))),
+                And(A(IntVal(r), IntVal(j)), C(IntVal(r), IntVal(j))),
+                And(B(IntVal(r), IntVal(j)), C(IntVal(r), IntVal(j)))
+            )
+            # T2 = Sigma0(A) + Maj
+            t2 = Xor(s0, maj_abc)
+            # State updates
+            fp.rule(A(IntVal(r+1), IntVal(j)), Xor(t1, t2))
+            fp.rule(B(IntVal(r+1), IntVal(j)), A(IntVal(r), IntVal(j)))
+            fp.rule(C(IntVal(r+1), IntVal(j)), B(IntVal(r), IntVal(j)))
+            fp.rule(D(IntVal(r+1), IntVal(j)), C(IntVal(r), IntVal(j)))
+            fp.rule(E(IntVal(r+1), IntVal(j)), Xor(D(IntVal(r), IntVal(j)), t1))
+            fp.rule(F(IntVal(r+1), IntVal(j)), E(IntVal(r), IntVal(j)))
+            fp.rule(G(IntVal(r+1), IntVal(j)), F(IntVal(r), IntVal(j)))
+            fp.rule(H(IntVal(r+1), IntVal(j)), G(IntVal(r), IntVal(j)))
 
-    # Digest MSB relation placeholder
-    DigestMSB = Function('DigestMSB', Int, Int, Bool)
-    # Query placeholder
-    # fp.query(DigestMSB(header_id, nonce_id))
+    # Digest MSB relation: link final state bit to digest bit
+    DigestMSB = Function('DigestMSB', IntSort(), IntSort(), IntSort(), BoolSort())
+    # Example rule: after 64 rounds, A(64,j) == digest MSB bit j
+    for j in range(8):
+        fp.rule(
+            DigestMSB(IntVal(0), IntVal(0), IntVal(j)),
+            A(IntVal(64), IntVal(31 - j))
+        )
+    # Query placeholder for header '0', nonce '0'
+    # res = fp.query(DigestMSB(0, 0, j))
 
     return fp
 
