@@ -1,7 +1,8 @@
 // GhostMintInterface.h
 #pragma once
+#include "CoreMinimal.h"
 #include "Kismet/BlueprintFunctionLibrary.h"
-#include "GhostMintInterface.generated.h"
+#include "BitcoinSSDInterface.generated.h"
 
 USTRUCT(BlueprintType)
 struct FTxInput {
@@ -24,7 +25,7 @@ struct FTxOutput {
 };
 
 UCLASS()
-class UGhostMintInterface : public UBlueprintFunctionLibrary {
+class UBitcoinSSDInterface : public UBlueprintFunctionLibrary {
     GENERATED_BODY()
 public:
     /**
