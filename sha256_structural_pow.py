@@ -159,7 +159,7 @@ def mk_sha256_rules(header_words):
     # Query placeholder: header 0, nonce 0
     # res = fp.query(DigestMSB(0, 0, j))
 
-    return fp
+    return fp, W, DigestMSB
 
 if __name__ == '__main__':
     # Phase C.1: fetch live header via JSON-RPC
@@ -212,8 +212,17 @@ if __name__ == '__main__':
     print(f"MerkleRoot: {merkle}")
     print(f"Time: {timestamp}")
     print(f"Bits: 0x{bits:08x}")
-    # Phase C.2 placeholder: structural DigestMSB query
-    # fp = mk_sha256_rules([int(header_hex[i*8:(i+1)*8],16) for i in range(16)])
-    # for j in range(8):
-    #     res = fp.query(DigestMSB(0, 0, j))
-    #     print('MSB', j, res)
+
+    # Phase C.2: build Fixedpoint engine and inject symbolic nonce bits
+    from z3 import Int, IntVal
+    hw = [int(header_hex[i*8:(i+1)*8], 16) for i in range(16)]
+    fp, W, DigestMSB = mk_sha256_rules(hw)
+    nonce = Int('nonce')
+    # Bind W(15,j) to nonce bits
+    for j in range(32):
+        fp.rule(W(IntVal(15), IntVal(j)), (nonce & (1 << j)) != 0)
+
+    print('[INFO] Querying DigestMSB bits 0..7 symbolically')
+    for j in range(8):
+        res = fp.query(DigestMSB(IntVal(0), IntVal(0), IntVal(j)))
+        print(f'[QUERY] bit {j}: {res}')
