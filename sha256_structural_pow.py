@@ -226,9 +226,29 @@ if __name__ == '__main__':
     for j in range(8):
         res = fp.query(DigestMSB(IntVal(0), IntVal(0), IntVal(j)))
         print(f'[QUERY] bit {j}: {res}')
-    # Phase C.3: retrieve structural trace and model
+    # Phase C.3: retrieve structural trace
     answer = fp.get_answer()
     print('[TRACE] Fixedpoint answer:')
     print(answer)
-    # Placeholder for nonce extraction and target comparison
-    # TODO: parse answer to build nonce bits and verify PoW
+
+    # Phase C.4: SMT fallback to extract nonce bits that satisfy DigestMSB
+    from z3 import Solver, sat
+    print('[INFO] Solving for nonce via SMT on DigestMSB constraints')
+    solver = Solver()
+    for j in range(8):
+        solver.add(DigestMSB(IntVal(0), IntVal(0), IntVal(j)))
+    if solver.check() != sat:
+        print('[FAIL] No solution for nonce bits under DigestMSB constraints')
+        sys.exit(1)
+    model = solver.model()
+    nonce_val = model[nonce].as_long()
+    print(f'[OK] Resolved nonce: {nonce_val} (0x{nonce_val:08x})')
+
+    # Verify final digest and target
+    full = hb[:-4] + nonce_val.to_bytes(4, 'little')
+    rd = hashlib.sha256(hashlib.sha256(full).digest()).digest()[::-1]
+    real_int = int.from_bytes(rd, 'big')
+    dec_target = decode_target(bits)
+    print(f'SHA256^2 digest: {rd.hex()}')
+    print(f'Target: 0x{dec_target:064x}')
+    print('Result:', '✅ Pass' if real_int <= dec_target else '❌ High-hash')
