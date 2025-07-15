@@ -132,14 +132,30 @@ def mk_sha256_rules(header_words):
             fp.rule(H(IntVal(r+1), IntVal(j)), G(IntVal(r), IntVal(j)))
 
     # Digest MSB relation: link final state bit to digest bit
+    # Final digest word bits: Hf[idx,j] = state(idx,64,j) xor IV[idx,j]
+    Hf = Function('Hf', IntSort(), IntSort(), BoolSort())
+    for idx, iv in enumerate([ 
+        0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+        0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+    ]):
+        for j in range(32):
+            fp.rule(
+                Hf(IntVal(idx), IntVal(j)),
+                Xor(
+                    A(IntVal(64), IntVal(j)),
+                    BoolVal((iv >> j) & 1)
+                )
+            )
+
+    # DigestMSB(header_id, nonce_id, bitpos) true for top-8 bits of Hf0
     DigestMSB = Function('DigestMSB', IntSort(), IntSort(), IntSort(), BoolSort())
-    # Example rule: after 64 rounds, A(64,j) == digest MSB bit j
     for j in range(8):
         fp.rule(
             DigestMSB(IntVal(0), IntVal(0), IntVal(j)),
-            A(IntVal(64), IntVal(31 - j))
+            Hf(IntVal(0), IntVal(31 - j))
         )
-    # Query placeholder for header '0', nonce '0'
+
+    # Query placeholder: header 0, nonce 0
     # res = fp.query(DigestMSB(0, 0, j))
 
     return fp
