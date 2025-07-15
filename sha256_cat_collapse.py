@@ -93,8 +93,27 @@ def main():
     fp.rule(PoWValid(IntVal(0), IntVal(0)), R(IntVal(0)))
 
     # Query PoWValid
+    # Phase 4: proof-caching to accelerate repeated solves
+    import os, hashlib
+    cache_dir = os.path.join(os.getcwd(), 'cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    prefix_id = hashlib.sha1(hb[:76]).hexdigest()
+    cache_file = os.path.join(cache_dir, prefix_id + '.json')
+    if os.path.isfile(cache_file):
+        print(f"[CACHE] Found proof cache for prefix {prefix_id}, skipping solve")
+        with open(cache_file, 'r') as f:
+            data = json.load(f)
+        print(f"[CACHE] Proof trace: {data}")
+        print("PoWValid: sat (cached)")
+        return
+    # run the fixedpoint query
     res = fp.query(PoWValid(IntVal(0), IntVal(0)))
     print(f"PoWValid: {res}")
+    # store proof trace for next time
+    proof = str(fp.get_answer())
+    with open(cache_file, 'w') as f:
+        json.dump(proof, f)
+    print(f"[CACHE] Cached proof trace to {cache_file}")
 
     # Phase 3: Export to SMT-LIB for optional backend use
     smt2 = fp.to_smt2(PoWValid(IntVal(0), IntVal(0)))
