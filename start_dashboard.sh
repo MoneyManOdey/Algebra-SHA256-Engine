@@ -44,11 +44,8 @@ public class BitcoinSSD : ModuleRules {
     }
 }
 CS
-  touch "$BITCOINSSD_VOLUME/Source/BitcoinSSD/BitcoinSSD.cpp"
-  touch "$BITCOINSSD_VOLUME/Source/BitcoinSSD/BitcoinSSD.h"
-fi
-else
-  echo "Warning: no .uproject files found in $SCRIPT_DIR; please ensure BitcoinSSD.uproject is present."
+    touch "$BITCOINSSD_VOLUME/Source/BitcoinSSD/BitcoinSSD.cpp"
+    touch "$BITCOINSSD_VOLUME/Source/BitcoinSSD/BitcoinSSD.h"
 fi
 
 echo "Launching dashboard..."
