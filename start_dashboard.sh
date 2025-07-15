@@ -14,7 +14,11 @@ echo "Syncing dashboard code to $BITCOINSSD_VOLUME..."
 rsync -a --delete "$SCRIPT_DIR/Source/BitcoinSSD" "$BITCOINSSD_VOLUME/Source/"
 rsync -a --delete "$SCRIPT_DIR/Config" "$BITCOINSSD_VOLUME/Config/"
 rsync -a --delete "$SCRIPT_DIR/sha256_cat_collapse.py" "$BITCOINSSD_VOLUME/Scripts/"
-rsync -a --delete "$SCRIPT_DIR"/*.uproject "$BITCOINSSD_VOLUME/"
+if ls "$SCRIPT_DIR"/*.uproject > /dev/null 2>&1; then
+  rsync -a --delete "$SCRIPT_DIR"/*.uproject "$BITCOINSSD_VOLUME/"
+else
+  echo "Warning: no .uproject files found in $SCRIPT_DIR; please ensure BitcoinSSD.uproject is present."
+fi
 
 echo "Launching dashboard..."
 cd "$BITCOINSSD_VOLUME"
