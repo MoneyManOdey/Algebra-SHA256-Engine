@@ -10,6 +10,7 @@ This script declares relations for the Bitcoin block header PoW:
 It produces the full rule scaffold (no solving) for downstream queries.
 """
 import sys
+import http.client, json, base64, struct
 from z3 import (
     Fixedpoint, IntSort, BoolSort,
     Function, IntVal, BoolVal, Not, Xor, And
@@ -161,12 +162,58 @@ def mk_sha256_rules(header_words):
     return fp
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: sha256_structural_pow.py <header-hex-prefix>')
-        sys.exit(1)
-    hh = sys.argv[1].strip()
-    if len(hh) != 160 or not hh.endswith('00000000'):
-        sys.exit('Error: header-hex must be 160 hex chars ending in 00000000')
-    hw = [int(hh[i*8:(i+1)*8], 16) for i in range(16)]
-    fp = mk_sha256_rules(hw)
-    print('Generated SHA-256 Fixedpoint rule scaffold. Total relations:', len(fp.relations()))
+    # Phase C.1: fetch live header via JSON-RPC
+    RPC_USER = 'Oliver'
+    RPC_PASS = 'satoshi'
+    RPC_HOST = '127.0.0.1'
+    RPC_PORT = 8332
+
+    def rpc_call(method, params=None):
+        conn = http.client.HTTPConnection(RPC_HOST, RPC_PORT)
+        payload = json.dumps({
+            'jsonrpc': '1.0', 'id': 'fp', 'method': method,
+            'params': params or []
+        })
+        auth = base64.b64encode(f"{RPC_USER}:{RPC_PASS}".encode()).decode()
+        conn.request(
+            'POST', '/', payload,
+            {'Authorization': f'Basic {auth}', 'Content-Type': 'application/json'}
+        )
+        resp = conn.getresponse()
+        data = resp.read()
+        j = json.loads(data)
+        if j.get('error'):
+            sys.exit(f"RPC error {method}: {j['error']}")
+        return j['result']
+
+    tip = rpc_call('getbestblockhash')
+    hdr = rpc_call('getblockheader', [tip, True])
+    version = hdr['version']
+    prev = hdr['previousblockhash']
+    merkle = hdr['merkleroot']
+    timestamp = hdr['time']
+    bits = int(hdr['bits'], 16)
+
+    # Assemble header (80 bytes)
+    hb = b''
+    hb += struct.pack('<I', version)
+    hb += bytes.fromhex(prev)[::-1]
+    hb += bytes.fromhex(merkle)[::-1]
+    hb += struct.pack('<I', timestamp)
+    hb += struct.pack('<I', bits)
+    hb += b'\x00\x00\x00\x00'
+    header_hex = hb.hex()
+    if len(hb) != 80 or not header_hex.endswith('00000000'):
+        sys.exit(f"Invalid header (len={len(hb)}, suffix={header_hex[-8:]})")
+
+    print(f"HeaderHex: {header_hex}")
+    print(f"Version: {version}")
+    print(f"PrevBlock: {prev}")
+    print(f"MerkleRoot: {merkle}")
+    print(f"Time: {timestamp}")
+    print(f"Bits: 0x{bits:08x}")
+    # Phase C.2 placeholder: structural DigestMSB query
+    # fp = mk_sha256_rules([int(header_hex[i*8:(i+1)*8],16) for i in range(16)])
+    # for j in range(8):
+    #     res = fp.query(DigestMSB(0, 0, j))
+    #     print('MSB', j, res)
