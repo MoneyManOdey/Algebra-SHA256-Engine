@@ -1,0 +1,7 @@
+{
+  "FileVersion": 3,
+  "EngineAssociation": "5.4",
+  "Modules": [
+    { "Name": "BitcoinSSD", "Type": "Runtime", "LoadingPhase": "Default" }
+  ]
+}

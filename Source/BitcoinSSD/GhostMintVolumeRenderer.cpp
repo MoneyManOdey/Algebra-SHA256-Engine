@@ -11,7 +11,7 @@ void UGhostMintVolumeRenderer::OnRegister() {
     Super::OnRegister();
     // Setup Nanite
     if (NodeMesh) {
-        NodeMesh->SetNaniteEnabled(true);
+        // NodeMesh->SetNaniteEnabled(true); // TODO: Enable via asset settings
     }
 }
 
