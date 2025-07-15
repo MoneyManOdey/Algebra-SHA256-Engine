@@ -96,5 +96,11 @@ def main():
     res = fp.query(PoWValid(IntVal(0), IntVal(0)))
     print(f"PoWValid: {res}")
 
+    # Phase 3: Export to SMT-LIB for optional backend use
+    smt2 = fp.to_smt2(PoWValid(IntVal(0), IntVal(0)))
+    with open('pow_full.smt2', 'w') as f:
+        f.write(smt2)
+    print('[EXPORT] SMT2 exported to pow_full.smt2')
+
 if __name__=='__main__':
     main()
