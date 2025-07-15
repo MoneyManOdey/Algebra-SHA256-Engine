@@ -226,3 +226,9 @@ if __name__ == '__main__':
     for j in range(8):
         res = fp.query(DigestMSB(IntVal(0), IntVal(0), IntVal(j)))
         print(f'[QUERY] bit {j}: {res}')
+    # Phase C.3: retrieve structural trace and model
+    answer = fp.get_answer()
+    print('[TRACE] Fixedpoint answer:')
+    print(answer)
+    # Placeholder for nonce extraction and target comparison
+    # TODO: parse answer to build nonce bits and verify PoW
