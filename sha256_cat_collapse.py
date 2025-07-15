@@ -50,6 +50,11 @@ def main():
 
     hw = [int(header_hex[i*8:(i+1)*8],16) for i in range(16)]
     fp = Fixedpoint()
+    # Phase 2: Engine tuning for zero-latency structural collapse
+    fp.set(engine='datalog')
+    fp.set('timeout', 0)
+    fp.set('max_memory', 8192)
+    fp.set(default_relation='input')
     # Import schedule + compression rules
     fp, W, _ = mk_sha256_rules(hw)
 
