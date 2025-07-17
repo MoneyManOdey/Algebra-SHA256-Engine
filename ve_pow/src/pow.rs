@@ -5,55 +5,63 @@ use sha2::{Digest, Sha256};
 /// without brute-force search. Returns Some(nonce) if the computed PoW hash
 /// meets the target, otherwise None.
 pub fn ve_pow(header: [u8; 80], target: [u8; 32]) -> Option<u32> {
-    // 1. Primary collapse: XOR-rotate folding of 4-byte words and Hamming-weight sum
-    let (xor_acc, hw_sum) = header[..76]
+    // 1. Enhanced collapse: XOR-rotate and Hamming-weight profiling, skew, symmetry, primes
+    let (xor_acc, hw_sum, skew_sum, skew_max) = header[..76]
         .chunks(4)
         .map(|chunk| {
             let mut arr = [0u8; 4];
             arr.copy_from_slice(chunk);
             let w = u32::from_be_bytes(arr);
-            (w.rotate_left((w & 0x1F) as u32), w.count_ones())
+            let rot = w.rotate_left((w & 0x1F) as u32);
+            let hw = w.count_ones();
+            // skew = ones - zeros in 32-bit word
+            let sk = hw as i32 - (32 - hw) as i32;
+            (rot, hw, sk, sk.abs() as u32)
         })
-        .fold((0u32, 0u32), |(acc, sum), (rot, hw)| {
-            (acc ^ rot, sum.wrapping_add(hw))
-        });
+        .fold(
+            (0u32, 0u32, 0i32, 0u32),
+            |(acc, sum_hw, sum_sk, max_sk), (rot, hw, sk, abs_sk)| {
+                (
+                    acc ^ rot,
+                    sum_hw.wrapping_add(hw),
+                    sum_sk.wrapping_add(sk),
+                    max_sk.max(abs_sk),
+                )
+            },
+        );
 
-    // 2. Skew bias: difference between high-bit and low-bit byte counts
-    let (hi_cnt, lo_cnt) = header[..76].iter().fold((0u32, 0u32), |(hi, lo), &b| {
-        if b & 0x80 != 0 {
-            (hi + 1, lo)
-        } else {
-            (hi, lo + 1)
-        }
-    });
-    let skew = hi_cnt.wrapping_sub(lo_cnt);
+    // average skew per segment
+    let avg_skew = (skew_sum / (76 / 4) as i32) as u32;
 
-    // 3. Symmetry pairing: XOR each byte with its mirrored counterpart
+    // symmetry reinforcement: fold 4-byte chunk pairs
     let sym_acc = header[..76]
-        .iter()
-        .zip(header[..76].iter().rev())
-        .fold(0u32, |acc, (&a, &b)| {
-            acc ^ ((a as u32) << ((b & 0x07) as u32))
+        .chunks(4)
+        .zip(header[..76].rchunks(4))
+        .fold(0u32, |acc, (a, b)| {
+            let wa = u32::from_be_bytes([a[0], a[1], a[2], a[3]]);
+            let wb = u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+            acc.wrapping_add((wa ^ wb).rotate_left(((wa ^ wb) & 0x0F) as u32))
         });
 
-    // 4. Prime-index folding: sum bytes at prime offsets to capture sparse entropy
+    // prime-byte focus: emphasize bytes at prime offsets
     const PRIMES: [usize; 21] = [
         2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73,
     ];
     let prime_sum = PRIMES
         .iter()
-        .fold(0u32, |sum, &i| sum.wrapping_add(header[i] as u32));
+        .fold(0u32, |s, &i| s.wrapping_add(header[i] as u32));
 
-    // 5. Mix all entropy features into initial nonce
+    // 2. Combine features into initial nonce with weighted mixing constants
     let mut nonce = xor_acc
         .wrapping_mul(0x9E3779B1)
         .wrapping_add(hw_sum)
-        .wrapping_add(skew.rotate_left(5))
-        .wrapping_add(sym_acc.wrapping_mul(0x3C6EF372))
-        .wrapping_add(prime_sum.rotate_right(7));
+        .wrapping_add(avg_skew.rotate_left(3))
+        .wrapping_add(skew_max.rotate_right(4))
+        .wrapping_add(sym_acc.wrapping_mul(0x561CCF1F))
+        .wrapping_add(prime_sum.wrapping_mul(0xDEADBEEF));
 
-    // 6. Final avalanche mix: rotate by low-order bits and avalanche constant
-    nonce = nonce.rotate_left((hw_sum & 0x1F) as u32);
+    // 3. Final avalanche mix to diffuse entropy
+    nonce = nonce.rotate_left(((hw_sum & 0x1F) ^ ((avg_skew & 0x1F) << 1)) as u32);
     nonce = nonce.wrapping_mul(0x85EBCA6B).wrapping_add(0xC2B2AE35);
 
     // 3. Inject nonce into header bytes (little-endian) and compute Double SHA-256
