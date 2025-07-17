@@ -41,17 +41,17 @@ fn main() -> anyhow::Result<()> {
         })?
     };
 
-    // 3. Compute V-Energy using header.bits
-    let energy = pow::energy_function_f(&header)?;
-    let threshold = pow::required_energy_c(header.bits);
-    if cli.json {
-        println!("{{\"energy\":{},\"threshold\":{}}}", energy, threshold);
+    // 3. Perform V-Energy collapse: fold header entropy into nonce and verify PoW
+    // Serialize header into byte array for the symbolic solver
+    let mut hdr_bytes = [0u8; 80];
+    {
+        let buf = bitcoin::consensus::encode::serialize(&header);
+        hdr_bytes.copy_from_slice(&buf);
     }
-    if energy < threshold {
-        // 4. Collapse to nonce
-        let nonce = pow::collapse_entropy_matrix(&header)?;
+    // Placeholder target: derive actual target bytes from header.bits when integrating
+    let target = [0u8; 32];
+    if let Some(nonce) = pow::ve_pow(hdr_bytes, target) {
         println!("Determined nonce: {} (0x{:08x})", nonce, nonce);
-        // 5. Assemble full block and submit
         let block_hex = header::assemble_block_hex(&header, nonce)?;
         if cli.submit {
             let resp = rpc::submit_block(&block_hex)?;
@@ -60,10 +60,7 @@ fn main() -> anyhow::Result<()> {
             println!("Block hex: {}", block_hex);
         }
     } else {
-        println!(
-            "Energy {} >= threshold {}, cannot collapse PoW",
-            energy, threshold
-        );
+        println!("V-Energy collapse failed: no valid nonce generated");
     }
     Ok(())
 }
