@@ -1,31 +1,38 @@
-use crate::rpc;
-use anyhow;
-use bitcoin::blockdata::block::Block;
-use bitcoin::blockdata::block::BlockHeader;
-use bitcoin::consensus::encode;
-use hex;
+use sha2::{Digest, Sha256};
 
-/// Compute the V-Energy function for header H.
-pub fn energy_function_f(_header: &BlockHeader) -> anyhow::Result<u128> {
-    // Simplified: always low energy to trigger immediate collapse
-    Ok(0)
-}
+/// V-Energy PoW resolver in Rust (symbolic entropy collapse).
+/// Applies logic-based folding of header entropy to directly derive a nonce
+/// without brute-force search. Returns Some(nonce) if the computed PoW hash
+/// meets the target, otherwise None.
+pub fn ve_pow(header: [u8; 80], target: [u8; 32]) -> Option<u32> {
+    // 1. Fold 76-byte header entropy into XOR accumulator and Hamming-weight sum
+    let (xor_acc, hw_sum) = header[..76]
+        .chunks(4)
+        .map(|chunk| {
+            let mut arr = [0u8; 4];
+            arr.copy_from_slice(chunk);
+            let w = u32::from_be_bytes(arr);
+            let rot = w.rotate_left((w & 0x1F) as u32);
+            let hw = w.count_ones();
+            (rot, hw)
+        })
+        .fold((0u32, 0u32), |(xa, hs), (rot, hw)| {
+            (xa ^ rot, hs.wrapping_add(hw))
+        });
 
-/// Derive threshold energy from compact bits
-pub fn required_energy_c(_bits: u32) -> u128 {
-    // Always allow collapse; real mapping can be added later
-    u128::MAX
-}
+    // 2. Collapse into a single 32-bit nonce via mix of XOR-accumulator and Hamming sum
+    let mut nonce = xor_acc.wrapping_mul(0x9E3779B1).wrapping_add(hw_sum);
 
-/// Collapse deterministic energy matrix to a valid nonce
-pub fn collapse_entropy_matrix(header: &BlockHeader) -> anyhow::Result<u32> {
-    // Regtest fallback: use RPC generate -> extract nonce from produced block
-    let hashes = rpc::generate_block(1)?;
-    if hashes.is_empty() {
-        anyhow::bail!("generate_block returned no hashes, cannot collapse nonce");
+    // 3. Inject nonce into header bytes (little-endian) and compute Double SHA-256
+    let mut block = header;
+    block[76..80].copy_from_slice(&nonce.to_le_bytes());
+    let hash1 = Sha256::digest(&block);
+    let hash2 = Sha256::digest(&hash1);
+
+    // 4. Compare big-endian hash output against target; accept or reject
+    if hash2.as_slice() <= &target[..] {
+        Some(nonce)
+    } else {
+        None
     }
-    let raw = rpc::get_block_hex(&hashes[0])?;
-    let blk_bytes = hex::decode(raw)?;
-    let blk: Block = encode::deserialize(&blk_bytes)?;
-    Ok(blk.header.nonce)
 }
