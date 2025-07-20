@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -91,14 +92,67 @@ func main() {
 		// wait for RPC
 		time.Sleep(3 * time.Second)
 	}
-	var info struct{ Blocks int64 }
-	if err := rpcCall("getblockchaininfo", nil, &info); err != nil {
+	// Fetch live chain metadata from Bitcoin Core
+	var bcInfo struct {
+		Chain                string  `json:"chain"`
+		Blocks               int64   `json:"blocks"`
+		Headers              int64   `json:"headers"`
+		Difficulty           float64 `json:"difficulty"`
+		MedianTime           int64   `json:"mediantime"`
+		InitialBlockDownload bool    `json:"initialblockdownload"`
+		ChainWork            string  `json:"chainwork"`
+	}
+	if err := rpcCall("getblockchaininfo", nil, &bcInfo); err != nil {
 		log.Fatalf("getblockchaininfo: %v", err)
 	}
-	var prevHash string
-	if err := rpcCall("getblockhash", []interface{}{info.Blocks}, &prevHash); err != nil {
-		log.Fatalf("getblockhash: %v", err)
+
+	var netInfo struct {
+		Version     int     `json:"version"`
+		Subversion  string  `json:"subversion"`
+		Connections int     `json:"connections"`
+		RelayFee    float64 `json:"relayfee"`
+		Warnings    string  `json:"warnings"`
 	}
+	if err := rpcCall("getnetworkinfo", nil, &netInfo); err != nil {
+		log.Fatalf("getnetworkinfo: %v", err)
+	}
+
+	var bestHash string
+	if err := rpcCall("getbestblockhash", nil, &bestHash); err != nil {
+		log.Fatalf("getbestblockhash: %v", err)
+	}
+
+	var bestBlk struct {
+		Hash              string `json:"hash"`
+		Height            int64  `json:"height"`
+		PreviousBlockHash string `json:"previousblockhash"`
+		Time              int64  `json:"time"`
+		Bits              string `json:"bits"`
+		Nonce             uint32 `json:"nonce"`
+		MerkleRoot        string `json:"merkleroot"`
+		Version           int32  `json:"version"`
+	}
+	if err := rpcCall("getblock", []interface{}{bestHash}, &bestBlk); err != nil {
+		log.Fatalf("getblock: %v", err)
+	}
+
+	// Named variables for later use
+	prevBlockHash := bestBlk.Hash
+	prevBlockTime := bestBlk.Time
+	difficultyBitsHex := bestBlk.Bits
+	blockHeight := bestBlk.Height
+	networkVersion := netInfo.Version
+	chainwork := bcInfo.ChainWork
+	mediantime := bcInfo.MedianTime
+
+	log.Printf("Chain: %s Height: %d Headers: %d Difficulty: %f", bcInfo.Chain, bcInfo.Blocks, bcInfo.Headers, bcInfo.Difficulty)
+	log.Printf("Mediantime: %d InitialDownload: %v Chainwork: %s", bcInfo.MedianTime, bcInfo.InitialBlockDownload, bcInfo.ChainWork)
+	log.Printf("Network version: %d Subversion: %s Connections: %d RelayFee: %f", netInfo.Version, netInfo.Subversion, netInfo.Connections, netInfo.RelayFee)
+	if netInfo.Warnings != "" {
+		log.Printf("Warnings: %s", netInfo.Warnings)
+	}
+	log.Printf("Best block height: %d hash: %s prev: %s", bestBlk.Height, bestBlk.Hash, bestBlk.PreviousBlockHash)
+	log.Printf("Best block time: %d bits: %s nonce: %d merkle: %s version: %d", bestBlk.Time, bestBlk.Bits, bestBlk.Nonce, bestBlk.MerkleRoot, bestBlk.Version)
 
 	// Regtest fallback: generate a block if on regtest
 	var ci struct{ Chain string }
@@ -121,21 +175,13 @@ func main() {
 		return
 	}
 
-	// getblockheader returns bits as hex string
-	var headerRaw struct {
-		Bits string `json:"bits"`
-		Time int64  `json:"time"`
-	}
-	if err := rpcCall("getblockheader", []interface{}{prevHash}, &headerRaw); err != nil {
-		log.Fatalf("getblockheader: %v", err)
-	}
-	// parse hex bits to uint32
-	bitsVal, err := strconv.ParseUint(headerRaw.Bits, 16, 32)
+	// Parse difficulty bits from best block
+	bitsVal, err := strconv.ParseUint(difficultyBitsHex, 16, 32)
 	if err != nil {
 		log.Fatalf("Failed to parse bits hex: %v", err)
 	}
 	bits := uint32(bitsVal)
-	timestamp := uint32(headerRaw.Time + 1)
+	timestamp := uint32(prevBlockTime + 1)
 
 	// 2. Create 3‑tx chain txSeed -> tx0 -> tx1
 	const amountSat = 130000000000000
@@ -143,51 +189,57 @@ func main() {
 	if err != nil {
 		log.Fatalf("wif: %v", err)
 	}
- // Build txSeed
- txSeed := wire.NewMsgTx(wire.TxVersion)
- txSeed.AddTxIn(wire.NewTxIn(&wire.OutPoint{Hash: chainhash.Hash{}, Index: 0xffffffff}, nil, nil))
- seedAddr, _ := btcutil.NewAddressPubKey(wif.SerializePubKey(), &chaincfg.MainNetParams)
- seedScript, _ := txscript.PayToAddrScript(seedAddr)
- txSeed.AddTxOut(wire.NewTxOut(amountSat, seedScript))
- // Sign txSeed here if needed (no signature for coinbase-style input)
- // Compute txSeed txid after building/signing
- txSeedHash := txSeed.TxHash() // <-- Compute txSeed txid in-memory for chaining
+	// Build txSeed
+	txSeed := wire.NewMsgTx(wire.TxVersion)
+	txSeed.AddTxIn(wire.NewTxIn(&wire.OutPoint{Hash: chainhash.Hash{}, Index: 0xffffffff}, nil, nil))
+	seedAddr, _ := btcutil.NewAddressPubKey(wif.SerializePubKey(), &chaincfg.MainNetParams)
+	seedScript, _ := txscript.PayToAddrScript(seedAddr)
+	txSeed.AddTxOut(wire.NewTxOut(amountSat, seedScript))
+	// Sign txSeed here if needed (no signature for coinbase-style input)
+	// Compute txSeed txid after building/signing
+	txSeedHash := txSeed.TxHash() // <-- Compute txSeed txid in-memory for chaining
 
- // Build tx0
- tx0 := wire.NewMsgTx(wire.TxVersion)
- // Reference txSeed output using txSeed's txid as input
- tx0.AddTxIn(wire.NewTxIn(
-     &wire.OutPoint{
-         Hash:  txSeedHash, // <-- Use txSeed computed txid as OutPoint.Hash
-         Index: 0,          // refer to output 0
-     },
-     nil,
-     nil,
- )) // Input to tx0 now linked to txSeed output
- tx0.AddTxOut(wire.NewTxOut(amountSat, seedScript))
- sig0, _ := txscript.SignatureScript(tx0, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
- tx0.TxIn[0].SignatureScript = sig0
- // Compute tx0 txid after signing
- tx0Hash := tx0.TxHash() // <-- Compute tx0 txid in-memory for chaining
+	// Build tx0
+	tx0 := wire.NewMsgTx(wire.TxVersion)
+	// Reference txSeed output using txSeed's txid as input
+	tx0.AddTxIn(wire.NewTxIn(
+		&wire.OutPoint{
+			Hash:  txSeedHash, // <-- Use txSeed computed txid as OutPoint.Hash
+			Index: 0,          // refer to output 0
+		},
+		nil,
+		nil,
+	)) // Input to tx0 now linked to txSeed output
+	tx0.AddTxOut(wire.NewTxOut(amountSat, seedScript))
+	sig0, _ := txscript.SignatureScript(tx0, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+	tx0.TxIn[0].SignatureScript = sig0
+	hashes0 := txscript.NewTxSigHashes(tx0)
+	witness0, _ := txscript.WitnessSignature(tx0, hashes0, 0, amountSat, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+	tx0.TxIn[0].Witness = witness0
+	// Compute tx0 txid after signing
+	tx0Hash := tx0.TxHash() // <-- Compute tx0 txid in-memory for chaining
 
- // Build tx1
- tx1 := wire.NewMsgTx(wire.TxVersion)
- // Reference tx0 output using tx0's txid as input
- tx1.AddTxIn(wire.NewTxIn(
-     &wire.OutPoint{
-         Hash:  tx0Hash, // <-- Use tx0 computed txid as OutPoint.Hash
-         Index: 0,
-     },
-     nil,
-     nil,
- )) // Input to tx1 now linked to tx0 output
- dest, _ := btcutil.DecodeAddress("bc1qa57c8e02usd0kjfucngktfrz5tukhr4u554y85", &chaincfg.MainNetParams)
- destScript, _ := txscript.PayToAddrScript(dest)
- tx1.AddTxOut(wire.NewTxOut(amountSat, destScript))
- sig1, _ := txscript.SignatureScript(tx1, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
- tx1.TxIn[0].SignatureScript = sig1
- // Compute tx1 txid after signing
- tx1Hash := tx1.TxHash() // <-- Compute tx1 txid in-memory (for further chaining or printing)
+	// Build tx1
+	tx1 := wire.NewMsgTx(wire.TxVersion)
+	// Reference tx0 output using tx0's txid as input
+	tx1.AddTxIn(wire.NewTxIn(
+		&wire.OutPoint{
+			Hash:  tx0Hash, // <-- Use tx0 computed txid as OutPoint.Hash
+			Index: 0,
+		},
+		nil,
+		nil,
+	)) // Input to tx1 now linked to tx0 output
+	dest, _ := btcutil.DecodeAddress("bc1qa57c8e02usd0kjfucngktfrz5tukhr4u554y85", &chaincfg.MainNetParams)
+	destScript, _ := txscript.PayToAddrScript(dest)
+	tx1.AddTxOut(wire.NewTxOut(amountSat, destScript))
+	sig1, _ := txscript.SignatureScript(tx1, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+	tx1.TxIn[0].SignatureScript = sig1
+	hashes1 := txscript.NewTxSigHashes(tx1)
+	witness1, _ := txscript.WitnessSignature(tx1, hashes1, 0, amountSat, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+	tx1.TxIn[0].Witness = witness1
+	// Compute tx1 txid after signing
+	tx1Hash := tx1.TxHash() // <-- Compute tx1 txid in-memory (for further chaining or printing)
 
 	// 3. Compute Merkle root
 	txs := []*btcutil.Tx{btcutil.NewTx(txSeed), btcutil.NewTx(tx0), btcutil.NewTx(tx1)}
@@ -196,7 +248,7 @@ func main() {
 
 	// 4. Build header prefix (76 bytes)
 	const version = 0x20000000
-	prevBytes, _ := hex.DecodeString(prevHash)
+	prevBytes, _ := hex.DecodeString(prevBlockHash)
 	var prev chainhash.Hash
 	copy(prev[:], reverseBytes(prevBytes))
 	var mr chainhash.Hash
