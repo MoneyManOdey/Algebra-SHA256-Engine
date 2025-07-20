@@ -143,25 +143,51 @@ func main() {
 	if err != nil {
 		log.Fatalf("wif: %v", err)
 	}
-	txSeed := wire.NewMsgTx(wire.TxVersion)
-	txSeed.AddTxIn(wire.NewTxIn(&wire.OutPoint{Hash: chainhash.Hash{}, Index: 0xffffffff}, nil, nil))
-	seedAddr, _ := btcutil.NewAddressPubKey(wif.SerializePubKey(), &chaincfg.MainNetParams)
-	seedScript, _ := txscript.PayToAddrScript(seedAddr)
-	txSeed.AddTxOut(wire.NewTxOut(amountSat, seedScript))
-	tx0 := wire.NewMsgTx(wire.TxVersion)
-	seedHash := txSeed.TxHash()
-	tx0.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&seedHash, 0), nil, nil))
-	tx0.AddTxOut(wire.NewTxOut(amountSat, seedScript))
-	sig0, _ := txscript.SignatureScript(tx0, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
-	tx0.TxIn[0].SignatureScript = sig0
-	tx1 := wire.NewMsgTx(wire.TxVersion)
-	tx0Hash := tx0.TxHash()
-	tx1.AddTxIn(wire.NewTxIn(wire.NewOutPoint(&tx0Hash, 0), nil, nil))
-	dest, _ := btcutil.DecodeAddress("bc1qa57c8e02usd0kjfucngktfrz5tukhr4u554y85", &chaincfg.MainNetParams)
-	destScript, _ := txscript.PayToAddrScript(dest)
-	tx1.AddTxOut(wire.NewTxOut(amountSat, destScript))
-	sig1, _ := txscript.SignatureScript(tx1, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
-	tx1.TxIn[0].SignatureScript = sig1
+ // Build txSeed
+ txSeed := wire.NewMsgTx(wire.TxVersion)
+ txSeed.AddTxIn(wire.NewTxIn(&wire.OutPoint{Hash: chainhash.Hash{}, Index: 0xffffffff}, nil, nil))
+ seedAddr, _ := btcutil.NewAddressPubKey(wif.SerializePubKey(), &chaincfg.MainNetParams)
+ seedScript, _ := txscript.PayToAddrScript(seedAddr)
+ txSeed.AddTxOut(wire.NewTxOut(amountSat, seedScript))
+ // Sign txSeed here if needed (no signature for coinbase-style input)
+ // Compute txSeed txid after building/signing
+ txSeedHash := txSeed.TxHash() // <-- Compute txSeed txid in-memory for chaining
+
+ // Build tx0
+ tx0 := wire.NewMsgTx(wire.TxVersion)
+ // Reference txSeed output using txSeed's txid as input
+ tx0.AddTxIn(wire.NewTxIn(
+     &wire.OutPoint{
+         Hash:  txSeedHash, // <-- Use txSeed computed txid as OutPoint.Hash
+         Index: 0,          // refer to output 0
+     },
+     nil,
+     nil,
+ )) // Input to tx0 now linked to txSeed output
+ tx0.AddTxOut(wire.NewTxOut(amountSat, seedScript))
+ sig0, _ := txscript.SignatureScript(tx0, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+ tx0.TxIn[0].SignatureScript = sig0
+ // Compute tx0 txid after signing
+ tx0Hash := tx0.TxHash() // <-- Compute tx0 txid in-memory for chaining
+
+ // Build tx1
+ tx1 := wire.NewMsgTx(wire.TxVersion)
+ // Reference tx0 output using tx0's txid as input
+ tx1.AddTxIn(wire.NewTxIn(
+     &wire.OutPoint{
+         Hash:  tx0Hash, // <-- Use tx0 computed txid as OutPoint.Hash
+         Index: 0,
+     },
+     nil,
+     nil,
+ )) // Input to tx1 now linked to tx0 output
+ dest, _ := btcutil.DecodeAddress("bc1qa57c8e02usd0kjfucngktfrz5tukhr4u554y85", &chaincfg.MainNetParams)
+ destScript, _ := txscript.PayToAddrScript(dest)
+ tx1.AddTxOut(wire.NewTxOut(amountSat, destScript))
+ sig1, _ := txscript.SignatureScript(tx1, 0, seedScript, txscript.SigHashAll, wif.PrivKey, true)
+ tx1.TxIn[0].SignatureScript = sig1
+ // Compute tx1 txid after signing
+ tx1Hash := tx1.TxHash() // <-- Compute tx1 txid in-memory (for further chaining or printing)
 
 	// 3. Compute Merkle root
 	txs := []*btcutil.Tx{btcutil.NewTx(txSeed), btcutil.NewTx(tx0), btcutil.NewTx(tx1)}
